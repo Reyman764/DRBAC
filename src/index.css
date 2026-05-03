@@ -306,6 +306,32 @@ button:disabled {
   font-weight: 800;
 }
 
+.table-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.control-bar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) repeat(3, minmax(150px, 190px)) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.control-search,
+.control-group {
+  min-width: 0;
+}
+
+.control-action {
+  display: flex;
+  align-items: end;
+}
+
 .segmented {
   display: flex;
   gap: 4px;
@@ -593,5 +619,18 @@ button:disabled {
 
   .row-actions {
     justify-content: flex-start;
+  }
+
+  .panel-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .control-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .control-action .btn {
+    width: 100%;
   }
 }
