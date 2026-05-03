@@ -71,6 +71,15 @@ function Pill({ label, color }) {
   );
 }
 
+function InfoTile({ label, value, accent }) {
+  return (
+    <div className="info-tile" style={{ '--accent': accent || 'var(--text)' }}>
+      <div className="stat-label">{label}</div>
+      <div className="info-value">{value}</div>
+    </div>
+  );
+}
+
 export default function SuperAdminDashboard({ onSignOut }) {
   const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -85,7 +94,7 @@ export default function SuperAdminDashboard({ onSignOut }) {
   const [assignmentFilter, setAssignmentFilter] = useState('all');
   const [userSort, setUserSort] = useState('created_desc');
   const [taskSort, setTaskSort] = useState('created_desc');
-  const [expandedId, setExpandedId] = useState(null);
+  const [drawer, setDrawer] = useState(null);
   const [tab, setTab] = useState('users');
 
   useEffect(() => {
@@ -236,6 +245,11 @@ export default function SuperAdminDashboard({ onSignOut }) {
   const completionRate = stats.totalTasks > 0 ? Math.round((stats.completed / stats.totalTasks) * 100) : 0;
   const visibleCount = tab === 'users' ? filteredUsers.length : filteredTasks.length;
   const totalCount = tab === 'users' ? users.length : enrichedTasks.length;
+  const selectedUser = drawer?.type === 'user' ? userRows.find((user) => user.id === drawer.id) : null;
+  const selectedTask = drawer?.type === 'task' ? enrichedTasks.find((task) => task.id === drawer.id) : null;
+  const selectedUserTasks = selectedUser ? enrichedTasks.filter((task) => task.assigned_to === selectedUser.id) : [];
+  const selectedTaskCreator = selectedTask ? users.find((user) => user.id === selectedTask.created_by) : null;
+  const selectedTaskAssignee = selectedTask ? users.find((user) => user.id === selectedTask.assigned_to) : null;
 
   if (loading) {
     return (
@@ -342,11 +356,10 @@ export default function SuperAdminDashboard({ onSignOut }) {
                   {filteredUsers.length === 0 && <div className="empty">No users match your filters.</div>}
                   {filteredUsers.map((user) => {
                     const { taskStats } = user;
-                    const expanded = expandedId === user.id;
                     const pct = user.completion;
                     return (
                       <motion.div key={user.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-                        <div className="row" style={{ cursor: 'pointer' }} onClick={() => setExpandedId(expanded ? null : user.id)}>
+                        <div className="row" style={{ cursor: 'pointer' }} onClick={() => setDrawer({ type: 'user', id: user.id })}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                             <Avatar name={user.full_name} email={user.email} />
                             <div>
@@ -367,35 +380,9 @@ export default function SuperAdminDashboard({ onSignOut }) {
                             >
                               {ROLES.map((role) => <option key={role} value={role}>{ROLE_META[role].label}</option>)}
                             </select>
-                            <button className="btn">{expanded ? 'Hide' : 'Details'}</button>
+                            <button className="btn" onClick={(event) => { event.stopPropagation(); setDrawer({ type: 'user', id: user.id }); }}>Details</button>
                           </div>
                         </div>
-                        <AnimatePresence>
-                          {expanded && (
-                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                              <div style={{ padding: '0 20px 18px 72px' }}>
-                                <div className="progress" style={{ marginBottom: 14 }}>
-                                  <motion.div className="progress-fill" initial={{ width: 0 }} animate={{ width: `${pct}%` }} />
-                                </div>
-                                {taskStats.list.length === 0 ? (
-                                  <p className="subtitle">No assigned tasks yet.</p>
-                                ) : (
-                                  <div className="list" style={{ border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden' }}>
-                                    {taskStats.list.slice(0, 6).map((task) => (
-                                      <div className="row" key={task.id} style={{ padding: '12px 14px' }}>
-                                        <div>
-                                          <div className="row-title">{task.title}</div>
-                                          <div className="row-subtitle">{new Date(task.created_at).toLocaleDateString()}</div>
-                                        </div>
-                                        <Pill label={STATUS_META[task.status]?.label || task.status} color={STATUS_META[task.status]?.color || 'var(--text-soft)'} />
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
                       </motion.div>
                     );
                   })}
@@ -438,7 +425,7 @@ export default function SuperAdminDashboard({ onSignOut }) {
                 <div className="list">
                   {filteredTasks.length === 0 && <div className="empty">No tasks match your filters.</div>}
                   {filteredTasks.map((task) => (
-                    <motion.div className="row" key={task.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+                    <motion.div className="row" key={task.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} style={{ cursor: 'pointer' }} onClick={() => setDrawer({ type: 'task', id: task.id })}>
                       <div>
                         <div className="row-title">{task.title}</div>
                         <div className="row-subtitle">{task.description || 'No description'} | Created {new Date(task.created_at).toLocaleDateString()}</div>
@@ -447,6 +434,7 @@ export default function SuperAdminDashboard({ onSignOut }) {
                         <span className="row-subtitle">By {task.creatorName}</span>
                         <span className="row-subtitle">To {task.assigneeName}</span>
                         <Pill label={STATUS_META[task.status]?.label || task.status} color={STATUS_META[task.status]?.color || 'var(--text-soft)'} />
+                        <button className="btn" onClick={(event) => { event.stopPropagation(); setDrawer({ type: 'task', id: task.id }); }}>Details</button>
                       </div>
                     </motion.div>
                   ))}
@@ -456,6 +444,142 @@ export default function SuperAdminDashboard({ onSignOut }) {
           </div>
         </section>
       </main>
+
+      <AnimatePresence>
+        {drawer && (
+          <motion.div className="drawer-layer" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <button className="drawer-scrim" onClick={() => setDrawer(null)} aria-label="Close details" />
+            <motion.aside
+              className="detail-drawer"
+              initial={{ x: 420 }}
+              animate={{ x: 0 }}
+              exit={{ x: 420 }}
+              transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+            >
+              {selectedUser && (
+                <>
+                  <div className="drawer-head">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <Avatar name={selectedUser.full_name} email={selectedUser.email} size={48} />
+                      <div>
+                        <p className="eyebrow">User profile</p>
+                        <h2 className="drawer-title">{selectedUser.full_name || 'Unnamed user'}</h2>
+                        <p className="drawer-subtitle">{selectedUser.email}</p>
+                      </div>
+                    </div>
+                    <button className="btn" onClick={() => setDrawer(null)}>Close</button>
+                  </div>
+
+                  <div className="drawer-body">
+                    <div className="drawer-section">
+                      <div className="drawer-inline">
+                        <Pill label={ROLE_META[selectedUser.role]?.label || selectedUser.role} color={ROLE_META[selectedUser.role]?.color || 'var(--text-soft)'} />
+                        <span className="row-subtitle">Joined {selectedUser.created_at ? new Date(selectedUser.created_at).toLocaleDateString() : 'Unknown'}</span>
+                      </div>
+                      <label className="label" style={{ marginTop: 18 }}>Role control</label>
+                      <select
+                        className="select"
+                        value={selectedUser.role}
+                        disabled={updating === selectedUser.id}
+                        onChange={(event) => handleRoleChange(selectedUser.id, event.target.value)}
+                      >
+                        {ROLES.map((role) => <option key={role} value={role}>{ROLE_META[role].label}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="drawer-stat-grid">
+                      <InfoTile label="Assigned" value={selectedUser.taskStats.assigned} accent="var(--blue)" />
+                      <InfoTile label="Active" value={selectedUser.active} accent="var(--amber)" />
+                      <InfoTile label="Completed" value={selectedUser.taskStats.completed} accent="var(--green)" />
+                      <InfoTile label="Completion" value={`${selectedUser.completion}%`} accent="var(--gold-2)" />
+                    </div>
+
+                    <div className="drawer-section">
+                      <div className="drawer-section-head">
+                        <h3 className="panel-title">Assigned tasks</h3>
+                        <span className="table-meta">{selectedUserTasks.length} total</span>
+                      </div>
+                      {selectedUserTasks.length === 0 ? (
+                        <p className="subtitle">No tasks assigned to this user yet.</p>
+                      ) : (
+                        <div className="drawer-list">
+                          {selectedUserTasks.map((task) => (
+                            <button key={task.id} className="drawer-list-row" onClick={() => setDrawer({ type: 'task', id: task.id })}>
+                              <span>
+                                <span className="row-title">{task.title}</span>
+                                <span className="row-subtitle">{new Date(task.created_at).toLocaleDateString()}</span>
+                              </span>
+                              <Pill label={STATUS_META[task.status]?.label || task.status} color={STATUS_META[task.status]?.color || 'var(--text-soft)'} />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {selectedTask && (
+                <>
+                  <div className="drawer-head">
+                    <div>
+                      <p className="eyebrow">Task details</p>
+                      <h2 className="drawer-title">{selectedTask.title}</h2>
+                      <p className="drawer-subtitle">Created {selectedTask.created_at ? new Date(selectedTask.created_at).toLocaleDateString() : 'Unknown'}</p>
+                    </div>
+                    <button className="btn" onClick={() => setDrawer(null)}>Close</button>
+                  </div>
+
+                  <div className="drawer-body">
+                    <div className="drawer-section">
+                      <div className="drawer-inline">
+                        <Pill label={STATUS_META[selectedTask.status]?.label || selectedTask.status} color={STATUS_META[selectedTask.status]?.color || 'var(--text-soft)'} />
+                        <span className="row-subtitle">{selectedTask.assigned_to ? 'Assigned' : 'Unassigned'}</span>
+                      </div>
+                      <p className="drawer-description">{selectedTask.description || 'No description has been added for this task.'}</p>
+                    </div>
+
+                    <div className="drawer-stat-grid">
+                      <InfoTile label="Status" value={STATUS_META[selectedTask.status]?.label || selectedTask.status} accent={STATUS_META[selectedTask.status]?.color || 'var(--text)'} />
+                      <InfoTile label="Created by" value={selectedTask.creatorName} accent="var(--gold-2)" />
+                      <InfoTile label="Assigned to" value={selectedTask.assigneeName} accent="var(--blue)" />
+                      <InfoTile label="Created" value={selectedTask.created_at ? new Date(selectedTask.created_at).toLocaleDateString() : 'Unknown'} accent="var(--text-soft)" />
+                    </div>
+
+                    <div className="drawer-section">
+                      <h3 className="panel-title">People</h3>
+                      <div className="drawer-list" style={{ marginTop: 12 }}>
+                        <button
+                          className="drawer-list-row"
+                          disabled={!selectedTaskCreator}
+                          onClick={() => selectedTaskCreator && setDrawer({ type: 'user', id: selectedTaskCreator.id })}
+                        >
+                          <span>
+                            <span className="row-title">Creator</span>
+                            <span className="row-subtitle">{selectedTask.creatorName}</span>
+                          </span>
+                          {selectedTaskCreator && <Pill label={ROLE_META[selectedTaskCreator.role]?.label || selectedTaskCreator.role} color={ROLE_META[selectedTaskCreator.role]?.color || 'var(--text-soft)'} />}
+                        </button>
+                        <button
+                          className="drawer-list-row"
+                          disabled={!selectedTaskAssignee}
+                          onClick={() => selectedTaskAssignee && setDrawer({ type: 'user', id: selectedTaskAssignee.id })}
+                        >
+                          <span>
+                            <span className="row-title">Assignee</span>
+                            <span className="row-subtitle">{selectedTask.assigneeName}</span>
+                          </span>
+                          {selectedTaskAssignee && <Pill label={ROLE_META[selectedTaskAssignee.role]?.label || selectedTaskAssignee.role} color={ROLE_META[selectedTaskAssignee.role]?.color || 'var(--text-soft)'} />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </motion.aside>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
