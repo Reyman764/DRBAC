@@ -113,12 +113,24 @@ export default function AdminDashboard({ onSignOut }) {
       return;
     }
     setTasks((prev) => prev.map((task) => task.id === taskId ? { ...task, status: newStatus } : task));
+    showToast('success', `Status updated to ${STATUS_META[newStatus]?.label}.`);
   }, [showToast]);
 
   const handleDelete = useCallback(async (taskId) => {
-    const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+    if (!window.confirm('Delete this task? This action cannot be undone.')) return;
+    // Use .select('id') so Supabase returns the deleted rows — an empty
+    // array means RLS silently blocked the delete (no error, 0 rows removed).
+    const { data: deleted, error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', taskId)
+      .select('id');
     if (error) {
       showToast('error', error.message);
+      return;
+    }
+    if (!deleted || deleted.length === 0) {
+      showToast('error', 'Delete failed: task not found or permission denied.');
       return;
     }
     setTasks((prev) => prev.filter((task) => task.id !== taskId));
@@ -150,7 +162,7 @@ export default function AdminDashboard({ onSignOut }) {
   return (
     <div className="app-shell">
       <AnimatePresence>
-        {toast && <motion.div className="toast" initial={{ opacity: 0, y: -10, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }}>{toast.text}</motion.div>}
+        {toast && <motion.div className={`toast toast-${toast.type}`} initial={{ opacity: 0, y: -10, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }}>{toast.text}</motion.div>}
       </AnimatePresence>
 
       <main className="page">

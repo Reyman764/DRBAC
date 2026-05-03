@@ -110,7 +110,7 @@ export default function MemberDashboard({ onSignOut }) {
   return (
     <div className="app-shell">
       <AnimatePresence>
-        {toast && <motion.div className="toast" initial={{ opacity: 0, y: -10, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }}>{toast.text}</motion.div>}
+        {toast && <motion.div className={`toast toast-${toast.type}`} initial={{ opacity: 0, y: -10, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }}>{toast.text}</motion.div>}
       </AnimatePresence>
 
       <main className="page">

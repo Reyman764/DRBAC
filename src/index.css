@@ -516,6 +516,18 @@ button:disabled {
   font-weight: 800;
 }
 
+.toast.toast-error {
+  border-color: color-mix(in srgb, var(--red) 45%, transparent);
+  background: color-mix(in srgb, var(--red) 14%, rgba(16, 18, 27, 0.95));
+  color: color-mix(in srgb, var(--red) 80%, var(--text));
+}
+
+.toast.toast-success {
+  border-color: color-mix(in srgb, var(--green) 45%, transparent);
+  background: color-mix(in srgb, var(--green) 14%, rgba(16, 18, 27, 0.95));
+  color: color-mix(in srgb, var(--green) 80%, var(--text));
+}
+
 .empty {
   padding: 56px 20px;
   text-align: center;

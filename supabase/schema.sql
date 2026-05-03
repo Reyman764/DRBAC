@@ -172,6 +172,17 @@ CREATE POLICY "admin_update_own_tasks"
     AND created_by = auth.uid()
   );
 
+-- POLICY: Admin can DELETE tasks they created
+--   NOTE: Without this policy, DELETE silently succeeds on the client
+--   (no error returned) but the row is never removed from the database,
+--   causing "ghost deletes" that reappear on page reload.
+CREATE POLICY "admin_delete_own_tasks"
+  ON public.tasks FOR DELETE
+  USING (
+    public.get_my_role() = 'admin'
+    AND created_by = auth.uid()
+  );
+
 -- POLICY: Member can SELECT tasks assigned to them
 CREATE POLICY "member_select_assigned_tasks"
   ON public.tasks FOR SELECT
