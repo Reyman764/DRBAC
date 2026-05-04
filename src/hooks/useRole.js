@@ -2,18 +2,22 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
+/** Auth events that should trigger a profiles.role refetch — not TOKEN_REFRESHED (hourly). */
+const ROLE_FETCH_EVENTS = new Set([
+  'INITIAL_SESSION',
+  'SIGNED_IN',
+  'SIGNED_OUT',
+  'USER_UPDATED',
+]);
+
 /**
  * useRole — fetches the current authenticated user's role from the profiles table.
  * Returns { role, isLoading, error }
- *
- * Usage:
- *   const { role, isLoading, error } = useRole();
- *   if (role === 'super_admin') { ... }
  */
 export function useRole() {
-  const [role, setRole]         = useState(null);
+  const [role, setRole] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError]       = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -23,7 +27,6 @@ export function useRole() {
         setIsLoading(true);
         setError(null);
 
-        // Get the current session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) throw sessionError;
         if (!session) {
@@ -34,7 +37,6 @@ export function useRole() {
           return;
         }
 
-        // Fetch the profile row for the current user
         const { data, error: profileError } = await supabase
           .from('profiles')
           .select('role')
@@ -58,8 +60,8 @@ export function useRole() {
 
     fetchRole();
 
-    // Re-fetch on auth state changes (login / logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (!ROLE_FETCH_EVENTS.has(event)) return;
       fetchRole();
     });
 

@@ -1,126 +1,162 @@
 # KaryaSync — Dynamic Role-Based Access Control Task Manager
 
-A premium, full-stack task management platform with dynamic role-based access control (DRBAC), built with React + Supabase.
+A task and user management platform with **Supabase Auth**, **Row Level Security (RLS)**, and **three role-specific dashboards** (Super Admin, Admin, Member). Built with **React 18**, **Vite 5**, **Framer Motion**, and **Tailwind** (utility layer + a custom CSS design system).
 
 ---
 
-## ✨ Features
+## What’s in the box
 
-- **Role-Based Dashboards** — Separate UIs for Super Admin, Admin, and Member roles
-- **Real-Time RBAC** — Roles enforced at database level via Supabase RLS policies
-- **Task Management** — Create, assign, track, and update tasks with status workflows
-- **User Management** — Super Admins can view all users and change roles instantly
-- **Live Statistics** — Animated stat cards, progress bars, and completion tracking
-- **Premium UI/UX** — Glassmorphism, ambient lighting, micro-animations, and responsive design
-
----
-
-## 🎨 Design System & UI Changes (v2.0)
-
-### Typography
-- **Primary Font**: `Inter` — Premium sans-serif with optical sizing and OpenType features (`cv02`, `cv03`, `cv04`, `cv11`)
-- **Display Font**: `Syne` — Bold, modern display face for headings and brand elements
-- **Monospace Font**: `JetBrains Mono` — For code-like elements and status badges
-- Replaced `Outfit` font with `Inter` across all components for a more refined, readable look
-- Increased base font size from 13px → 15px body, with proper typographic scale
-- Added negative letter-spacing (`-0.01em` to `-0.03em`) for tighter, more professional headings
-
-### Spacing & Layout
-- Increased card padding from `20px` → `24-26px` for more breathing room
-- Larger gaps between grid items (`12px` → `16px`)
-- More generous header margins (`32px` → `40px`)
-- Stat card values scaled up from `26-30px` → `30-34px`
-- Filter buttons enlarged from `7px 14px` → `9px 18px` padding
-- Progress bars thickened from `6px` → `8-10px` height
-
-### Visual Effects
-- **Glassmorphism Cards**: `backdrop-filter: blur(24px) saturate(180%)` with subtle borders
-- **Ambient Grid**: Faint accent-colored grid pattern overlay on all dashboard backgrounds
-- **Noise Texture**: Subtle SVG noise overlay for depth and texture
-- **Glow Effects**: Pulsing dot indicators with multi-layered `box-shadow` glows
-- **Hover Animations**: Cards lift with `translateY(-1px)` and border glow on hover
-- **Gradient Buttons**: Primary actions use smooth gradients with matching glow shadows
-- **Smooth Easing**: `cubic-bezier(0.16, 1, 0.3, 1)` for premium spring-like transitions
-
-### Color Palette
-- Refined text hierarchy: `#f0eeff` primary → `#9694b8` secondary → `#5c5a7a` muted
-- Softer borders: `rgba(255,255,255,0.06)` instead of harsh `0.07-0.08`
-- Enhanced accent glow: `0 0 16px` + `0 0 40px` dual-layer shadows on status dots
-- Card backgrounds use `rgba(13, 13, 26, 0.92)` with blur for glass effect
-
-### Auth Screen
-- Triple-ring animated loading spinner with counter-rotating rings
-- Labeled form fields with uppercase tracking labels
-- Gradient submit button with matching accent glow shadow
-- Input fields with focus ring animation (`box-shadow` transition)
-- Footer text for trust signal ("Powered by Supabase")
-
-### Component Improvements
-- All dashboards now use CSS utility classes (`glass`, `glass-hover`, `noise`, `ambient-grid`)
-- Consistent design tokens across Super Admin, Admin, and Member dashboards
-- Smoother `AnimatePresence` transitions with proper easing curves
-- Better empty state messaging with larger icons and contextual help text
+| Area | Description |
+|------|-------------|
+| **Auth** | Email/password sign-in; session drives which dashboard loads |
+| **Roles** | `super_admin`, `admin`, `member` — resolved from `profiles.role` |
+| **Tasks** | Title, description, status, assignee, optional **due date**, **priority** (`low` / `medium` / `high` / `urgent`) |
+| **Comments** | `task_comments` with thread UI; author label stored for readable threads under RLS |
+| **Super Admin** | All users & tasks, CSV export, bulk role changes, role **audit log** tab, realtime refresh |
+| **Admin** | Own tasks CRUD, member assignment, workload summary, task thread modal, filters & sort |
+| **Member** | Assigned tasks, full-page task detail with thread, status controls, notification-style active count |
+| **Profile** | Settings modal to set **full name** (stored as `NULL` when empty, not `''`) |
+| **Command palette** | `Ctrl/⌘ + K` — quick open profile + search tasks by role |
 
 ---
 
-## 🛠 Tech Stack
+## Fixes & improvements (recent)
 
-| Layer       | Technology                     |
-|-------------|-------------------------------|
-| Frontend    | React 18, Framer Motion       |
-| Styling     | CSS Design System + Tailwind  |
-| Backend     | Supabase (Auth, DB, RLS)      |
-| Build       | Vite 5                        |
-| Fonts       | Inter, Syne, JetBrains Mono   |
+These address production and mobile issues and tighten security at the database layer.
+
+### Critical
+
+- **`window.confirm()` removed** — Deletes use a **`ConfirmModal`** so confirmation works on iOS (native `confirm` is unreliable there).
+- **`useRole` refetch guard** — Ignores `TOKEN_REFRESHED` so the profile role is not re-fetched every token refresh (~hourly); refetch only on meaningful auth events.
+- **Toast positioning** — Toasts render inside a **fixed flex anchor** so Framer Motion does not fight `%`-based centering on narrow viewports.
+- **Error boundaries** — Each role dashboard is wrapped in **`ErrorBoundary`** so one render error does not white-screen the whole app; user can retry.
+- **`full_name` semantics** — Signup trigger stores **`NULL`** for missing/blank names (not empty string), matching JS fallbacks like `displayName()` and avoiding “Unnamed” traps.
+- **Schema / app alignment** — App expects `tasks.priority`, `tasks.due_date`, comments, and audit tables; run migrations (see below) or you’ll see errors such as `column tasks.priority does not exist` (connection is fine; schema is behind).
+
+### Responsive & UX
+
+- Auth layout: single column at **≤1024px**; story + card no longer fight for width on phones.
+- Rows: **`row-actions`** wrap; main column **`min-width: 0`** to reduce overflow.
+- Detail drawer: **`100%`-based slide**, width clamped (`min(440px, 100vw - 48px)`), sticky header with safe-area padding, **Escape** closes (Super Admin).
+- Super Admin: **separate search state** for Users vs Tasks tabs; improved empty states; row hover transitions.
+- Avatars: **stable per-user hue** from id/seed (`Avatar` + `avatarHue.js`).
+- **⌘K / Ctrl+K** command palette with **custom events** to open task drawers or profile from any screen.
+
+### Database & security
+
+- **`SET search_path = public`** on **`SECURITY DEFINER`** functions (`get_my_role`, `handle_new_user`, `handle_updated_at`, role audit logger, comment author display filler) to reduce search-path injection risk.
+- **Admin task assignment** — RLS **`WITH CHECK`** uses **`profile_is_assignable_member`**: `assigned_to` must be **`NULL`** or a profile with role **`member`** (not arbitrary users).
+- **Constraints** — Sane limits on title/description/comment length; `task_priority` enum; optional `due_date`.
+- **Role audit** — `profile_role_audit` + trigger on `profiles.role` updates (actor = `auth.uid()` when available).
+
+### Features added in this generation
+
+- Due dates and priority (UI + DB).
+- Profile settings (name).
+- Task comment threads + denormalized **`author_display_name`** for members who cannot read all profiles.
+- Supabase **Realtime** subscriptions on dashboards for `profiles` / `tasks` (and audit inserts for Super Admin).
+- Super Admin **CSV export**, **bulk role apply**, **audit** tab.
 
 ---
 
-## 🚀 Getting Started
+## Tech stack
+
+| Layer | Technology |
+|-------|------------|
+| UI | React 18, Framer Motion |
+| Styling | `index.css` (design tokens) + Tailwind |
+| Data | Supabase JS v2 (Auth, Postgres, RLS) |
+| Build | Vite 5 |
+
+**Fonts** (see `index.css`): **Plus Jakarta Sans** (body), **Space Grotesk** (display/brand).
+
+---
+
+## Getting started
 
 ```bash
-# Install dependencies
 npm install
+```
 
-# Set up environment
-cp .env.example .env
-# Add your Supabase URL and anon key
+Create `.env` (or `.env.local`) with:
 
-# Start development server
+```env
+VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key
+```
+
+```bash
 npm run dev
 ```
 
 ---
 
-## 📁 Project Structure
+## Supabase database setup
+
+**New project:** run the full script in **`supabase/schema.sql`** (SQL Editor).
+
+**Existing database** (older KaryaSync schema without `priority` / comments / audit): run **`supabase/migrations/upgrade_existing_v1_to_v2.sql`** once, then reload the app.
+
+After migration, in **Database → Replication**, add tables to **`supabase_realtime`** as needed (e.g. `tasks`, `profiles`, `profile_role_audit`) so live subscriptions work.
+
+---
+
+## Project structure
 
 ```
 src/
-├── App.jsx                    # Auth flow + role routing
-├── index.css                  # Premium design system (CSS custom properties)
-├── main.jsx                   # React entry point
+├── App.jsx                     # Auth, role routing, palette, profile modal, error boundaries
+├── index.css                   # Layout, components, responsive rules
+├── main.jsx
+├── constants/taskMeta.js       # Status / priority meta + length limits
 ├── lib/
-│   └── supabaseClient.js      # Supabase client config
-├── hooks/
-│   └── useRole.js             # Role detection hook
+│   ├── supabaseClient.js
+│   ├── displayName.js
+│   ├── avatarHue.js
+│   └── appEvents.js            # ⌘K / profile / task open events
+├── hooks/useRole.js
 └── components/
-    ├── SuperAdminDashboard.jsx # Full user + task management
-    ├── AdminDashboard.jsx      # Task CRUD + assignment
-    ├── AdminTaskCreator.jsx    # Task creation form
-    └── MemberDashboard.jsx     # Task viewing + status updates
+    ├── SuperAdminDashboard.jsx
+    ├── AdminDashboard.jsx
+    ├── MemberDashboard.jsx
+    ├── ConfirmModal.jsx
+    ├── ErrorBoundary.jsx
+    ├── ToastOutlet.jsx
+    ├── ProfileSettings.jsx
+    ├── CommandPalette.jsx
+    ├── TaskComments.jsx
+    ├── Avatar.jsx
+    └── AdminTaskCreator.jsx    # standalone legacy form (not mounted in App)
 ```
 
 ---
 
-## 🔐 Role Hierarchy
+## Role capabilities (summary)
 
-| Role         | Capabilities                                       |
-|-------------|---------------------------------------------------|
-| Super Admin | View all users/tasks, change roles, full oversight |
-| Admin       | Create tasks, assign to members, manage status     |
-| Member      | View assigned tasks, update own task status         |
+| Role | Capabilities |
+|------|----------------|
+| **Super Admin** | All profiles & tasks; change roles (single + bulk); audit read; CSV; comments where policy allows |
+| **Admin** | CRUD tasks they created; assign only **members**; workload view; threads on own tasks |
+| **Member** | Read/update assigned tasks; thread; profile name |
+
+Exact rules live in **`supabase/schema.sql`** (RLS policies).
 
 ---
 
-## 📄 License
+## Future evolution (planned directions)
+
+Ideas that fit naturally on top of the current architecture — pick by priority.
+
+1. **Product & UX** — Email/notifications for new assignments & due dates; in-app notification center replacing the numeric badge-only hint; richer empty states & onboarding checklist for new workspaces.
+2. **Tasks** — Attachments (Supabase Storage), subtasks, recurring tasks, @mentions in comments, optional **soft delete** / archive instead of hard delete.
+3. **Org model** — Workspaces / teams, invites, custom roles or permission presets beyond the three enums.
+4. **Observability** — Structured error reporting (e.g. Sentry), analytics on task throughput, SLAs by priority.
+5. **Security & compliance** — Optional MFA enforced in Supabase; IP allowlisting; periodic RLS/policy review automation; tighter column-level restrictions if profiles gain more PII.
+6. **Realtime** — Presence (“who’s online”), collaborative cursors optional, conflict handling if two admins edit one task.
+7. **CLI / API** — Supabase Edge Functions for webhooks (Slack/Jira); read-only reporting API keys for BI tools.
+
+---
+
+## License
 
 MIT

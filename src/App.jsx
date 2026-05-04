@@ -5,6 +5,11 @@ import { useRole } from './hooks/useRole';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import MemberDashboard from './components/MemberDashboard';
+import ErrorBoundary from './components/ErrorBoundary';
+import CommandPalette from './components/CommandPalette';
+import ProfileSettings from './components/ProfileSettings';
+import ToastOutlet from './components/ToastOutlet';
+import { listenOpenProfile } from './lib/appEvents';
 
 function LoadingScreen() {
   return (
@@ -96,17 +101,21 @@ function AuthForm() {
           </div>
 
           <div className="segmented" style={{ marginBottom: 22 }}>
-            <button className={`segment ${mode === 'login' ? 'active' : ''}`} onClick={() => { setMode('login'); setError(null); setSuccess(null); }}>
+            <button type="button" className={`segment ${mode === 'login' ? 'active' : ''}`} onClick={() => { setMode('login'); setError(null); setSuccess(null); }}>
               Log in
             </button>
-            <button className={`segment ${mode === 'signup' ? 'active' : ''}`} onClick={() => { setMode('signup'); setError(null); setSuccess(null); }}>
+            <button type="button" className={`segment ${mode === 'signup' ? 'active' : ''}`} onClick={() => { setMode('signup'); setError(null); setSuccess(null); }}>
               Sign up
             </button>
           </div>
 
           <AnimatePresence mode="wait">
-            {error && <motion.div className="toast" initial={{ opacity: 0, y: -8, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }}>{error}</motion.div>}
-            {success && <motion.div className="toast" initial={{ opacity: 0, y: -8, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }}>{success}</motion.div>}
+            {(error || success) && (
+              <ToastOutlet
+                key={error ? `err-${error.slice(0, 24)}` : 'ok'}
+                toast={error ? { type: 'error', text: error } : { type: 'success', text: success }}
+              />
+            )}
           </AnimatePresence>
 
           <form className="form-grid" onSubmit={handleSubmit}>
@@ -131,12 +140,15 @@ function AuthForm() {
 export default function App() {
   const [session, setSession] = useState(undefined);
   const { role, isLoading: roleLoading } = useRole();
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: activeSession } }) => setSession(activeSession));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, activeSession) => setSession(activeSession));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, activeSession) => setSession(activeSession));
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => listenOpenProfile(() => setProfileOpen(true)), []);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -145,32 +157,45 @@ export default function App() {
   if (session === undefined || (session && roleLoading)) return <LoadingScreen />;
   if (!session) return <AuthForm />;
 
+  const inWorkspace = Boolean(role === 'super_admin' || role === 'admin' || role === 'member');
+
   return (
-    <AnimatePresence mode="wait">
-      {role === 'super_admin' && (
-        <motion.div key="super-admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <SuperAdminDashboard onSignOut={handleSignOut} />
-        </motion.div>
-      )}
-      {role === 'admin' && (
-        <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <AdminDashboard onSignOut={handleSignOut} />
-        </motion.div>
-      )}
-      {role === 'member' && (
-        <motion.div key="member" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <MemberDashboard onSignOut={handleSignOut} />
-        </motion.div>
-      )}
-      {!role && !roleLoading && (
-        <div className="app-shell" style={{ display: 'grid', placeItems: 'center', padding: 24 }}>
-          <div className="panel" style={{ maxWidth: 460, padding: 24, textAlign: 'center' }}>
-            <h2 className="panel-title">Role not assigned</h2>
-            <p className="subtitle">Please contact your administrator to assign your workspace role.</p>
-            <button className="btn" onClick={handleSignOut} style={{ marginTop: 18 }}>Sign out</button>
+    <>
+      {inWorkspace && <CommandPalette role={role} />}
+      <ProfileSettings open={profileOpen} onClose={() => setProfileOpen(false)} />
+
+      <AnimatePresence mode="wait">
+        {role === 'super_admin' && (
+          <motion.div key="super-admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <ErrorBoundary title="Super admin dashboard crashed">
+              <SuperAdminDashboard onSignOut={handleSignOut} />
+            </ErrorBoundary>
+          </motion.div>
+        )}
+        {role === 'admin' && (
+          <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <ErrorBoundary title="Admin dashboard crashed">
+              <AdminDashboard onSignOut={handleSignOut} />
+            </ErrorBoundary>
+          </motion.div>
+        )}
+        {role === 'member' && (
+          <motion.div key="member" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <ErrorBoundary title="Member dashboard crashed">
+              <MemberDashboard onSignOut={handleSignOut} />
+            </ErrorBoundary>
+          </motion.div>
+        )}
+        {!role && !roleLoading && (
+          <div className="app-shell" style={{ display: 'grid', placeItems: 'center', padding: 24 }}>
+            <div className="panel" style={{ maxWidth: 460, padding: 24, textAlign: 'center' }}>
+              <h2 className="panel-title">Role not assigned</h2>
+              <p className="subtitle">Please contact your administrator to assign your workspace role.</p>
+              <button type="button" className="btn" onClick={handleSignOut} style={{ marginTop: 18 }}>Sign out</button>
+            </div>
           </div>
-        </div>
-      )}
-    </AnimatePresence>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
